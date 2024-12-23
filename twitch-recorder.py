@@ -53,10 +53,32 @@ async def get_best_stream_url(username):
 async def record_stream(username):
     m3u8_url = await get_best_stream_url(username)
     if m3u8_url:
+        # Use a transport stream format (.ts) for resilient recording
+        ts_file = os.path.join(output_folder, f"{twitch_username}_{datetime.now().strftime('%d_%m_%y_%H_%M')}.ts")
+        
         # Run ffmpeg command
-        ffmpeg_cmd = ['ffmpeg', '-i', m3u8_url, '-c', 'copy', '-bsf:a', 'aac_adtstoasc', f'{output_folder}\\{twitch_username} {datetime.now().strftime("%d_%m_%y - %H_%M")}.mp4']
+        ffmpeg_cmd = [
+            'ffmpeg', '-i', m3u8_url,
+            '-c', 'copy', '-f', 'mpegts', ts_file
+        ]
+        
+        print(f"Starting recording: {ts_file}")
         process = await asyncio.create_subprocess_exec(*ffmpeg_cmd)
         await process.communicate()
+        
+        print(f"Recording complete: {ts_file}")
+        
+        # Optional: Convert .ts to .mp4
+        mp4_file = ts_file.replace('.ts', '.mp4')
+        ffmpeg_convert_cmd = [
+            'ffmpeg', '-i', ts_file, '-c', 'copy', mp4_file
+        ]
+        print(f"Converting to MP4: {mp4_file}")
+        convert_process = await asyncio.create_subprocess_exec(*ffmpeg_convert_cmd)
+        await convert_process.communicate()
+        
+        print(f"Conversion complete: {mp4_file}")
+        os.remove(ts_file)  # Remove the intermediate .ts file if conversion succeeds
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
     asyncio.run(record_stream(twitch_username))
